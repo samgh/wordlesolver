@@ -2,6 +2,7 @@ import json
 import math
 import queue
 from queue import PriorityQueue
+from os.path import exists
 from tqdm import tqdm
 from typing import List
 
@@ -16,13 +17,19 @@ with open('words.json') as file:
 
 
 """
-Given a guess, feedback, and excluded letters, determine whether a given
-candidate string is a valid next choice
+Given the current guesses and feedback, determine whether a given candidate
+string is a valid next choice
 """
 def _is_possible_next_guess(guesses: List[str], feedbacks: List[str], candidate: str) -> bool:
     if candidate in guesses:
         return False
 
+    # Valid candidates must match all of the following conditions. For every
+    # guess and feedback:
+    #  1. Must match guess[i] if feedback[i] == '1'
+    #  2. candidate[i] must be in guess if feedback[i] == '2', but candidate[i]
+    #     must NOT equal guess[i]
+    #  3. candidate[i] must not be in guess if feedback[i] == '3'
     for i in range(len(guesses)):
         for j in range(len(guesses[i])):
          # Green
@@ -37,42 +44,21 @@ def _is_possible_next_guess(guesses: List[str], feedbacks: List[str], candidate:
 
     return True
 
-
 """
-Given a string and the feedback, what are all the possible next guesses.
-Optionally exclude letters
+Given the current guesses and feedbacks, what are all the possible next guesses
 """
 def possible_next_guesses(guesses: List[str], feedbacks: List[str]) -> List[str]:
-    # excluded_letters = []
-    # for i in range(len(guesses)):
-    #     for j in range(len(guesses[i])):
-    #         if feedbacks[i][j] == '3':
-    #             excluded_letters.append(guesses[i][j])
-    #
-    # unfiltered = precomputed_data[guesses[-1]][feedbacks[-1]]
-    #
-    # to_return = []
-    # for word in unfiltered:
-    #     valid = True
-    #     for i in range(len(word)):
-    #         if word[i] in excluded_letters:
-    #             valid = False
-    #     if valid:
-    #         to_return.append(word)
-    #
-    # return to_return
-    #
-    #
-    #
+    # For each string, see if it is a valid next guess
     return [s for s in all_words if _is_possible_next_guess(guesses, feedbacks, s)]
-
-
 
 """
 Given a guess and a solution, generate the feedback string
 """
 def get_feedback_string(guess: str, solution: str) -> str:
     to_return = []
+
+    # Check for each character whether it is in the string or not and if its
+    # in the correct position
     for i in range(len(guess)):
         if guess[i] == solution[i]:
             to_return.append(str(1))
@@ -88,12 +74,14 @@ Given a dictionary of word counts for each response, find the standard deviation
 (technically the square of the std deviation) in the sizes of each bucket
 """
 def dict_std_dev(data: dict) -> float:
+    # Find what the average number of words for each bucket should be
     avg_num_words = 0
     for key in data:
         avg_num_words = avg_num_words + data[key]
 
     avg_num_words = avg_num_words/len(data)
 
+    # Sum up the squares of the difference between actual and average
     std_dev = 0
     for key in data:
         std_dev = std_dev + (data[key] - avg_num_words) ** 2
@@ -101,68 +89,101 @@ def dict_std_dev(data: dict) -> float:
     return std_dev
 
 """
+Given a dict of words mapping to numeric values, find the n words with the
+smallest counts
+"""
+def find_n_smallest(data: dict, n: int = 1) -> dict:
+    # We're mapping words to numbers and we want to sort and look up by the
+    # numbers, so we invert the mapping. We assume that all numbers are distinct
+    inverted_dict = {}
+    for key in data:
+        if data[key] in inverted_dict:
+            inverted_dict[data[key]].append(key)
+        else:
+            inverted_dict[data[key]] = [key]
+
+    if n >= len(data):
+        sorted_values = sorted(inverted_dict)
+    else:
+        sorted_values = sorted(inverted_dict)[:n]
+
+    to_return = {}
+    for key in sorted_values:
+        to_return[key] = inverted_dict[key]
+
+    return to_return
+
+
+"""
 Find the starting word that divides all other words into the most even buckets
 by feedback. Calculation is pretty time consuming so it saves all standard
 deviations to a file. Returns the string with the lowest standard deviation
 """
-def best_dividing_word_std_dev(file_name: str = "test_std_dev.json"):
+def best_dividing_word_std_dev(file_name: str = "test_std_dev.json", num_results: int = 1) -> dict:
+    # We will calculate the standard deviation for the bucketing of each
+    # possible starting word
     std_devs = {}
-    for guess in tqdm(all_words):
-        counts = {}
-        for feedback in feedbacks:
-            counts[feedback] = 0
 
-        for solution in all_words:
-            if guess == solution:
-                continue
+    # Check if file exists. If so, don't recompute
+    if exists(file_name):
+        with open(file_name) as file:
+            std_devs = json.load(file)
+    else:
+        # Go through every possible guess/solution pair
+        for guess in tqdm(all_words):
+            counts = {}
 
-            curr_feedback = get_feedback_string(guess, solution)
-            counts[curr_feedback] = counts[curr_feedback] + 1
+            # Initialize for every feedback. Even empty ones should be included in
+            # standard deviation
+            for feedback in feedbacks:
+                counts[feedback] = 0
 
-        std_devs[guess] = dict_std_dev(counts)
+            # Every word is a possible solution
+            for solution in all_words:
+                # We don't include '11111' in feedbacks, so just skip this
+                if guess == solution:
+                    continue
 
-    min = float('inf')
-    min_word = ""
-    for key in std_devs:
-        if std_devs[key] < min:
-            min = std_devs[key]
-            min_word = key
+                # Get feedback string and update sum
+                curr_feedback = get_feedback_string(guess, solution)
+                counts[curr_feedback] = counts[curr_feedback] + 1
 
-    with open(file_name, "w") as outfile:
-        json.dump(std_devs, outfile)
+            # Compute standard deviation
+            std_devs[guess] = dict_std_dev(counts)
 
-    return min_word
+            with open(file_name, "w") as outfile:
+                json.dump(std_devs, outfile)
+
+
+    return find_n_smallest(std_devs, num_results)
 
 """
 Find the starting word with the fewest number of letters not included in the
-solution
+solution. Generates json file with the counts of '33333' feedback for each word
 """
-def best_dividing_word_max_info():
+def best_dividing_word_max_info(file_name: str = "test_max_info.json", num_results: int = 1) -> dict:
     words = {}
-    best_word = ""
-    min_nonmatching_words = float('inf')
-    for guess in tqdm(all_words):
-        count = 0
-        for solution in all_words:
-            curr_feedback = get_feedback_string(guess, solution)
-            if curr_feedback == "33333":
-                count = count+1
 
-        if count in words:
-            words[count].append(guess)
-        else:
-            words[count] = [guess]
+    # Check if file exists. If so, don't recompute
+    if exists(file_name):
+        with open(file_name) as file:
+            words = json.load(file)
+    else:
+        # For every guess/solution pair, see if the result is '33333' and if so
+        # add it to the count
+        for guess in tqdm(all_words):
+            count = 0
+            for solution in all_words:
+                curr_feedback = get_feedback_string(guess, solution)
+                if curr_feedback == "33333":
+                    count = count+1
 
-        if count < min_nonmatching_words:
-            min_nonmatching_words = count
-            best_word = guess
+                words[guess] = count
 
-    sorted_words = sorted(words)
-    for i in range(10):
-        print(words[sorted_words[i]])
-    return guess
+        with open(file_name, "w") as outfile:
+            json.dump(words, outfile)
 
-
+    return find_n_smallest(words, num_results)
 
 """
 Given a feedback string, generate all possible next feedback strings. We assume
@@ -202,7 +223,7 @@ def best_next_guess_std_dev(curr_guesses: List[str], curr_feedbacks: List[str]) 
     feedbacks = possible_feedbacks(curr_feedbacks[-1])
     possible_words = possible_next_guesses(curr_guesses, curr_feedbacks)
     std_devs = {}
-    for guess in possible_words: #tqdm(possible_words):
+    for guess in possible_words:
         counts = {}
         for feedback in feedbacks:
             counts[feedback] = 0
@@ -216,15 +237,13 @@ def best_next_guess_std_dev(curr_guesses: List[str], curr_feedbacks: List[str]) 
 
         std_devs[guess] = dict_std_dev(counts)
 
-    min = float('inf')
-    min_word = ""
-    for key in std_devs:
-        if std_devs[key] < min:
-            min = std_devs[key]
-            min_word = key
+    smallest = find_n_smallest(std_devs)
+    return smallest[list(smallest.keys())[0]][0]
 
-    return min_word
-
+"""
+Test using standard dev heuristic. For every starting word and every possible
+solution word, count the length of every path
+"""
 def tester_std_dev(starting_words: List[str] = ["lares"], words: List[str] = all_words) -> dict:
     lengths = {}
     for word in starting_words:
@@ -296,7 +315,6 @@ def tester_max_info(starting_words: List[str] = ["lares"], words: List[str] = al
                 curr_word = best_next_guess_max_info(result, feedback)
                 result.append(curr_word)
 
-            # print(result)
             if len(result) in lengths:
                 lengths[starting_word][len(result)] = lengths[starting_word][len(result)]+1
             else:
@@ -310,32 +328,18 @@ def tester_max_info(starting_words: List[str] = ["lares"], words: List[str] = al
     return lengths
 
 if __name__ == '__main__':
-    """
-    with open('std_devs.json') as file:
-        data = json.load(file)
-    inverted = {}
-    std_devs = []
-    for key in data:
-        inverted[data[key]] = key
-        std_devs.append(data[key])
-
-    std_devs.sort()
-
-    for i in range(10):
-        print(inverted[std_devs[i]])
-
     # Result: ["lares", "rales", "tares", "soare", "reais"]
-    """
+    print(best_dividing_word_std_dev("std_devs.json", 5))
 
-    """
-    best_dividing_word_max_info()
     # Result: ["stoae", "toeas","aloes","aeons","aeros", "arose", 'soare"]
-    """
+    print(best_dividing_word_max_info("max_infos.json", 5))
 
-    print(tester_std_dev(["lares", "rales", "tares", "soare", "reais", "stoae", "toeas","aloes","aeons","aeros", "adieu"]))
+    # print(tester_std_dev(["lares", "rales", "tares", "soare", "reais", "stoae", "toeas","aloes","aeons","aeros", "adieu"]))
     print(tester_max_info(["lares", "rales", "tares", "soare", "reais", "stoae", "toeas","aloes","aeons","aeros", "adieu"]))
 
     """
+    # Sample of how to use this for an actual puzzle with subsequent guesses and
+    # feedback
     print(best_next_guess(["lares"], ["33233"]))
     print(best_next_guess(["lares", "tronc"], ["33233", "31313"]))
     print(best_next_guess(["lares", "tronc", "bring"], ["33233", "31313", "31311"]))
