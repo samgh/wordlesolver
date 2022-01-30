@@ -198,7 +198,7 @@ def _possible_feedbacks_inner(curr_feedback: str, result: List[str], idx: int = 
 Given the current game state, determine the next best move that optimally splits
 the answer space
 """
-def best_next_guess(curr_guesses: List[str], curr_feedbacks: List[str]) -> str:
+def best_next_guess_std_dev(curr_guesses: List[str], curr_feedbacks: List[str]) -> str:
     feedbacks = possible_feedbacks(curr_feedbacks[-1])
     possible_words = possible_next_guesses(curr_guesses, curr_feedbacks)
     std_devs = {}
@@ -225,9 +225,7 @@ def best_next_guess(curr_guesses: List[str], curr_feedbacks: List[str]) -> str:
 
     return min_word
 
-
-def tester(starting_words: List[str] = ["lares"], words: List[str] = all_words) -> dict:
-
+def tester_std_dev(starting_words: List[str] = ["lares"], words: List[str] = all_words) -> dict:
     lengths = {}
     for word in starting_words:
         lengths[word] = {}
@@ -241,7 +239,7 @@ def tester(starting_words: List[str] = ["lares"], words: List[str] = all_words) 
             while curr_word != word:
                 feedback_str = get_feedback_string(curr_word, word)
                 feedback.append(feedback_str)
-                curr_word = best_next_guess(result, feedback)
+                curr_word = best_next_guess_std_dev(result, feedback)
                 result.append(curr_word)
 
             # print(result)
@@ -252,12 +250,64 @@ def tester(starting_words: List[str] = ["lares"], words: List[str] = all_words) 
 
             print(result)
 
-    with open("length_counts.json", "w") as outfile:
+    with open("length_counts_std_dev.json", "w") as outfile:
         json.dump(lengths, outfile)
 
     return lengths
 
+def best_next_guess_max_info(curr_guesses: List[str], curr_feedbacks: List[str]) -> str:
+    if curr_feedbacks[-1].count('3') == 0:
+         return best_next_guess_std_dev(curr_guesses, curr_feedbacks)
 
+    feedbacks = possible_feedbacks(curr_feedbacks[-1])
+    possible_words = possible_next_guesses(curr_guesses, curr_feedbacks)
+
+    max_info_string = ""
+    min_unmatching = float('inf')
+    for guess in possible_words:
+        count = 0
+        for solution in possible_words:
+            if guess == solution:
+                continue
+
+            curr_feedback = get_feedback_string(guess, solution)
+            count = count+curr_feedback.count('3')
+
+        if count < min_unmatching:
+            min_unmatching = count
+            max_info_string = guess
+
+    return max_info_string
+
+def tester_max_info(starting_words: List[str] = ["lares"], words: List[str] = all_words) -> dict:
+    lengths = {}
+    for word in starting_words:
+        lengths[word] = {}
+
+    for word in words: #tqdm(words):
+        for starting_word in starting_words:
+            curr_word = starting_word
+            result = [curr_word]
+            feedback = []
+
+            while curr_word != word:
+                feedback_str = get_feedback_string(curr_word, word)
+                feedback.append(feedback_str)
+                curr_word = best_next_guess_max_info(result, feedback)
+                result.append(curr_word)
+
+            # print(result)
+            if len(result) in lengths:
+                lengths[starting_word][len(result)] = lengths[starting_word][len(result)]+1
+            else:
+                lengths[starting_word][len(result)] = 1
+
+            print(result)
+
+    with open("length_counts_max_info.json", "w") as outfile:
+        json.dump(lengths, outfile)
+
+    return lengths
 
 if __name__ == '__main__':
     """
@@ -282,7 +332,8 @@ if __name__ == '__main__':
     # Result: ["stoae", "toeas","aloes","aeons","aeros", "arose", 'soare"]
     """
 
-    print(tester(["lares", "rales", "tares", "soare", "reais", "stoae", "toeas","aloes","aeons","aeros", "adieu"]))
+    print(tester_std_dev(["lares", "rales", "tares", "soare", "reais", "stoae", "toeas","aloes","aeons","aeros", "adieu"]))
+    print(tester_max_info(["lares", "rales", "tares", "soare", "reais", "stoae", "toeas","aloes","aeons","aeros", "adieu"]))
 
     """
     print(best_next_guess(["lares"], ["33233"]))
