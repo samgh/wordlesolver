@@ -32,7 +32,7 @@ def _is_possible_next_guess(guess: str, candidate: str, feedback: str, excluded_
         if feedback[i] == '1' and guess[i] != candidate[i]:
             return False
         # Yellow
-        if feedback[i] == '2' and not guess[i] in candidate:
+        if feedback[i] == '2' and (guess[i] == candidate[i] or not guess[i] in candidate):
             return False
         # Grey
         if feedback[i] == 3 and guess[i] in candidate:
@@ -145,47 +145,6 @@ def longest_path_to_every_word(guesses: List[str], current_feedback: str, exclud
 #     return dp[current_guess][current_feedback]
 
 
-
-# def possible_next_guesses_2(guess: str, feedback: str, available_letters: str = letters):
-#     to_return = []
-#     for word in all_words:
-#         result = _is_possible_next_guess_2(guess, word, feedback, available_letters)
-#         if result[0]:
-#             to_return.append([word, result[1]])
-#
-#     return to_return
-#
-# def _is_possible_next_guess_2(guess: str, candidate: str, feedback: str, available_letters: str) -> (bool, str):
-#     available_letters_list = list(available_letters)
-#
-#     for i in range(len(guess)):
-#         # Green
-#         if feedback[i] == '1' and guess[i] != candidate[i]:
-#             return False, ""
-#         # Yellow
-#         if feedback[i] == '2' and not guess[i] in candidate:
-#             return False, ""
-#         # Grey
-#         if feedback[i] == '3' and guess[i] in candidate:
-#             return False, ""
-#         # Remove from available
-#         if feedback[i] == '3':
-#             available_letters_list.remove(guess[i])
-#
-#     return True, "".join(available_letters_list)
-#
-#
-#
-# def find_all_paths() -> int:
-#     dp = {}
-#     for word in all_words:
-#         dp[word] = {}
-#         for feedback in feedbacks:
-#             dp[word][feedback] = -1
-#
-#     print(dp)
-
-
 def best_dividing_word():
     avg_num_words = len(all_words)/len(feedbacks)
     std_devs = {}
@@ -213,12 +172,11 @@ def best_dividing_word():
 
 
 def possible_feedbacks(curr_feedback: str, result: List[str], idx: int = 0, path: List[str] = []):
-    print(path)
     if idx == len(curr_feedback):
         result.append("".join(path))
         return
 
-    if curr_feedback[idx] == '3':
+    if curr_feedback[idx] >= '2':
         path.append('3')
         possible_feedbacks(curr_feedback, result, idx+1, path)
         path.pop()
@@ -233,19 +191,22 @@ def possible_feedbacks(curr_feedback: str, result: List[str], idx: int = 0, path
         possible_feedbacks(curr_feedback, result, idx+1, path)
         path.pop()
 
-def best_next_guess(curr_guess: str, curr_feedback: str, excluded_letters: List[str]) -> str:
+def best_next_guess(curr_guess: str, curr_feedback: str, excluded_letters: List[str], excluded_words: List[str] = []) -> str:
     feedbacks = []
     possible_feedbacks(curr_feedback, feedbacks)
     possible_words = [s for s in all_words if _is_possible_next_guess(curr_guess, s, curr_feedback, excluded_letters)]
     avg_num_words = len(possible_words) / len(feedbacks)
-    for guess in tqdm(possible_words):
+
+    std_devs = {}
+    for guess in possible_words: #tqdm(possible_words):
+        if guess in excluded_words:
+            continue
+
         counts = {}
         for feedback in feedbacks:
             counts[feedback] = 0
 
-        print(counts)
         for solution in possible_words:
-            print(solution)
             if guess == solution:
                 continue
 
@@ -261,15 +222,44 @@ def best_next_guess(curr_guess: str, curr_feedback: str, excluded_letters: List[
 
     min = float('inf')
     min_word = ""
-    for key in data:
-        if key[-1] != 's' and data[key] < min:
-            min = data[key]
+    for key in std_devs:
+        if std_devs[key] < min:
+            min = std_devs[key]
             min_word = key
 
     return min_word
 
 
+def tester(starting_word = "lares", words: List[str] = all_words) -> dict:
+    lengths = {}
+    for word in tqdm(words):
+        curr_word = starting_word
+        result = [curr_word]
+        excluded_letters = []
+
+        while curr_word != word:
+            feedback_str = get_feedback_string(curr_word, word)
+            for i in range(len(feedback_str)):
+                if feedback_str[i] == '3':
+                    excluded_letters.append(curr_word[i])
+
+            curr_word = best_next_guess(curr_word, feedback_str, excluded_letters, result)
+            result.append(curr_word)
+
+        print(result)
+        if len(result) in lengths:
+            lengths[len(result)] = lengths[len(result)]+1
+        else:
+            lengths[len(result)] = 1
+
+    return lengths
+
+
+
 if __name__ == '__main__':
+
+
+
     # print(possible_next_guesses("abact", "11113"))
     # print(get_feedback_string("abbot", "abbey"))
 
@@ -288,4 +278,12 @@ if __name__ == '__main__':
     # with open('test.json') as file:
     #     data = json.load(file)
 
+    # print(best_next_guess("adieu", "32332", ['a','i','e']))
+    # print(best_next_guess("durns", "22333", ['a','i','e','n','r','s']))
+    # print(best_next_guess("dumpy", "22333", ['a','i','e','n','r','s','m','p','y']))
+
     print(best_next_guess("adieu", "32332", ['a','i','e']))
+
+    # print(tester()) #"lares", ["alley"]))
+# adieu
+# durns
