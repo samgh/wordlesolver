@@ -1,6 +1,7 @@
 import json
 import math
 import queue
+from queue import PriorityQueue
 from tqdm import tqdm
 from typing import List
 
@@ -13,41 +14,25 @@ with open('words.json') as file:
     data = json.load(file)
     all_words = [word for word in data]
 
-with open('precompute.json') as file:
-    precomputed_data = json.load(file)
-
-def precompute_all_feedbacks() -> dict:
-    to_return = {}
-    for word in tqdm(all_words):
-        all_feedbacks_for_word = {}
-        for feedback in feedbacks:
-            all_feedbacks_for_word[feedback] = [s for s in all_words if _is_possible_next_guess([word], [feedback], [s])]
-
-        to_return[word] = all_feedbacks_for_word
-
-    with open("precompute.json", "w") as outfile:
-        json.dump(to_return, outfile)
 
 """
 Given a guess, feedback, and excluded letters, determine whether a given
 candidate string is a valid next choice
 """
-def _is_possible_next_guess(guess: str, feedback: str, candidate: str) -> bool:
-    if feedback == "11111" and guess == candidate:
-        return True
-
-    if guess == candidate:
+def _is_possible_next_guess(guesses: List[str], feedbacks: List[str], candidate: str) -> bool:
+    if candidate in guesses:
         return False
 
-    for i in range(len(candidate)):
+    for i in range(len(guesses)):
+        for j in range(len(guesses[i])):
          # Green
-         if feedback[i] == '1' and guess[i] != candidate[i]:
+         if feedbacks[i][j] == '1' and guesses[i][j] != candidate[j]:
              return False
          # Yellow
-         if feedback[i] == '2' and (guess[i] == candidate[i] or not guess[i] in candidate):
+         if feedbacks[i][j] == '2' and (guesses[i][j] == candidate[j] or not guesses[i][j] in candidate):
              return False
          # Grey
-         if feedback[i] == '3' and guess[i] in candidate:
+         if feedbacks[i][j] == '3' and guesses[i][j] in candidate:
              return False
 
     return True
@@ -58,19 +43,28 @@ Given a string and the feedback, what are all the possible next guesses.
 Optionally exclude letters
 """
 def possible_next_guesses(guesses: List[str], feedbacks: List[str]) -> List[str]:
-    excluded_letters = []
-    for i in range(len(guesses)):
-        for j in range(len(guesses[i])):
-            if feedbacks[i][j] == '3':
-                excluded_letters.append(guesses[i][j])
-
-    unfiltered = precomputed_data[guesses[-1]][feedbacks[-1]]
-
-    return [s for s in unfiltered for i in range(len(s)) if s[i] not in excluded_letters]
-
-
-
-    # return [s for s in all_words if _is_possible_next_guess(guess, s, feedback, excluded_letters)]
+    # excluded_letters = []
+    # for i in range(len(guesses)):
+    #     for j in range(len(guesses[i])):
+    #         if feedbacks[i][j] == '3':
+    #             excluded_letters.append(guesses[i][j])
+    #
+    # unfiltered = precomputed_data[guesses[-1]][feedbacks[-1]]
+    #
+    # to_return = []
+    # for word in unfiltered:
+    #     valid = True
+    #     for i in range(len(word)):
+    #         if word[i] in excluded_letters:
+    #             valid = False
+    #     if valid:
+    #         to_return.append(word)
+    #
+    # return to_return
+    #
+    #
+    #
+    return [s for s in all_words if _is_possible_next_guess(guesses, feedbacks, s)]
 
 
 
@@ -144,6 +138,7 @@ Find the starting word with the fewest number of letters not included in the
 solution
 """
 def best_dividing_word_max_info():
+    words = {}
     best_word = ""
     min_nonmatching_words = float('inf')
     for guess in tqdm(all_words):
@@ -153,10 +148,18 @@ def best_dividing_word_max_info():
             if curr_feedback == "33333":
                 count = count+1
 
+        if count in words:
+            words[count].append(guess)
+        else:
+            words[count] = [guess]
+
         if count < min_nonmatching_words:
             min_nonmatching_words = count
             best_word = guess
 
+    sorted_words = sorted(words)
+    for i in range(10):
+        print(words[sorted_words[i]])
     return guess
 
 
@@ -229,7 +232,7 @@ def tester(starting_words: List[str] = ["lares"], words: List[str] = all_words) 
     for word in starting_words:
         lengths[word] = {}
 
-    for word in tqdm(words):
+    for word in words: #tqdm(words):
         for starting_word in starting_words:
             curr_word = starting_word
             result = [curr_word]
@@ -247,15 +250,17 @@ def tester(starting_words: List[str] = ["lares"], words: List[str] = all_words) 
             else:
                 lengths[starting_word][len(result)] = 1
 
+            print(result)
+
     with open("length_counts.json", "w") as outfile:
-        json.dump(lenths, outfile)
+        json.dump(lengths, outfile)
 
     return lengths
 
 
 
 if __name__ == '__main__':
-
+    """
     with open('std_devs.json') as file:
         data = json.load(file)
     inverted = {}
@@ -266,14 +271,21 @@ if __name__ == '__main__':
 
     std_devs.sort()
 
-    # for i in range(10):
-        # print(inverted[std_devs[i]])
+    for i in range(10):
+        print(inverted[std_devs[i]])
 
-    # print(best_dividing_word_std_dev("std_devs.json"))
-    # print(best_dividing_word_max_info())
-    # print(tester("lares"))#, ["arise"])) #"lares", ["alley"]))
-    # print(tester(["lares", "rales", "tares", "soare", "reais", "adieu"]))
-    # print(tester("zymic"))
+    # Result: ["lares", "rales", "tares", "soare", "reais"]
+    """
 
-    # print(possible_next_guesses(["abbey"], ["11232"]))
-    precompute_all_feedbacks()
+    """
+    best_dividing_word_max_info()
+    # Result: ["stoae", "toeas","aloes","aeons","aeros", "arose", 'soare"]
+    """
+
+    print(tester(["lares", "rales", "tares", "soare", "reais", "stoae", "toeas","aloes","aeons","aeros", "adieu"]))
+
+    """
+    print(best_next_guess(["lares"], ["33233"]))
+    print(best_next_guess(["lares", "tronc"], ["33233", "31313"]))
+    print(best_next_guess(["lares", "tronc", "bring"], ["33233", "31313", "31311"]))
+    """
