@@ -362,18 +362,18 @@ if __name__ == '__main__':
     """
 
 
-    with open('length_counts_std_dev_solutions.json') as file:
+    with open('length_counts_max_info.json') as file:
         length_counts = json.load(file)
 
-    # filtered_length_counts = {}
-    # for word in length_counts:
-    #     filtered_length_counts[word] = {}
-    #     for length in length_counts[word]:
-    #         filtered_length_counts[word][length] = []
-    #         for solution in length_counts[word][length]:
-    #             if solution in solution_words:
-    #                 filtered_length_counts[word][length].append(solution)
-    # length_counts = filtered_length_counts
+    filtered_length_counts = {}
+    for word in length_counts:
+        filtered_length_counts[word] = {}
+        for length in length_counts[word]:
+            filtered_length_counts[word][length] = []
+            for solution in length_counts[word][length]:
+                if solution in solution_words:
+                    filtered_length_counts[word][length].append(solution)
+    length_counts = filtered_length_counts
 
     result = {}
     for word in length_counts:
